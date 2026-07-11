@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: Typecheck and test (Node 24)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test
+
+  dist-smoke:
+    name: Built output on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # engines say >=20: prove the compiled output actually runs there.
+      # dist/middy is excluded here: in the workspace it resolves
+      # middy-problem-details to .ts dev exports, which old Node cannot strip;
+      # the published artifact resolves dist via publishConfig instead.
+      - name: Smoke test middy-contracts dist on target Node
+        working-directory: packages/middy-contracts
+        run: |
+          node --input-type=module -e "
+          const { defineContract } = await import('./dist/contract/index.js');
+          const { toOpenAPI } = await import('./dist/openapi/index.js');
+          const contract = defineContract('smoke', { http: { method: 'GET', path: '/smoke' } });
+          const doc = toOpenAPI([contract], { title: 'smoke', version: '0.0.0' });
+          if (doc.paths['/smoke'] === undefined) throw new Error('missing path');
+          console.log('middy-contracts dist OK on', process.version);
+          "
+      - name: Smoke test middy-problem-details dist on target Node
+        working-directory: packages/middy-problem-details
+        run: |
+          node --input-type=module -e "
+          const { problemDetailsHandler, problem } = await import('./dist/index.js');
+          const request = { error: Object.assign(new Error('x'), { statusCode: 404, expose: true }) };
+          problemDetailsHandler().onError(request);
+          if (request.response.statusCode !== 404) throw new Error('bad status');
+          problem({ status: 400, title: 'ok' });
+          console.log('middy-problem-details dist OK on', process.version);
+          "

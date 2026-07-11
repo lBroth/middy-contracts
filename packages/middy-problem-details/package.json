@@ -1,0 +1,63 @@
+{
+  "name": "middy-problem-details",
+  "version": "0.1.0",
+  "description": "RFC 9457 Problem Details error responses for Middy (application/problem+json).",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lBroth/middy-contracts.git",
+    "directory": "packages/middy-problem-details"
+  },
+  "bugs": "https://github.com/lBroth/middy-contracts/issues",
+  "homepage": "https://github.com/lBroth/middy-contracts/tree/main/packages/middy-problem-details#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "middy",
+    "middleware",
+    "aws-lambda",
+    "lambda",
+    "serverless",
+    "rfc9457",
+    "rfc-9457",
+    "problem-details",
+    "problem+json",
+    "http-errors",
+    "errors"
+  ],
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "prepack": "node -e \"if(!(process.env.npm_config_user_agent||'').startsWith('pnpm/'))throw new Error('pack/publish with pnpm, not npm — publishConfig exports must be handled by pnpm')\" && npm run build",
+    "prepublishOnly": "node -e \"if(!(process.env.npm_config_user_agent||'').startsWith('pnpm/'))throw new Error('publish with pnpm, not npm')\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3"
+  }
+}

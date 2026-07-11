@@ -1,0 +1,100 @@
+{
+  "name": "middy-contracts",
+  "version": "0.1.0",
+  "description": "Contract-first toolkit for Middy: Standard Schema request/response validation, OpenAPI 3.1 generation, RFC 9457 errors.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lBroth/middy-contracts.git",
+    "directory": "packages/middy-contracts"
+  },
+  "bugs": "https://github.com/lBroth/middy-contracts/issues",
+  "homepage": "https://github.com/lBroth/middy-contracts#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "middy",
+    "middleware",
+    "aws-lambda",
+    "lambda",
+    "serverless",
+    "standard-schema",
+    "contract",
+    "openapi",
+    "validation",
+    "rest",
+    "api",
+    "zod",
+    "valibot",
+    "arktype",
+    "joi"
+  ],
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.type-tests.ts",
+    "!src/**/test-support.ts"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./middy": {
+      "types": "./src/middy/index.ts",
+      "default": "./src/middy/index.ts"
+    },
+    "./openapi": {
+      "types": "./src/openapi/index.ts",
+      "default": "./src/openapi/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./middy": {
+        "types": "./dist/middy/index.d.ts",
+        "default": "./dist/middy/index.js"
+      },
+      "./openapi": {
+        "types": "./dist/openapi/index.d.ts",
+        "default": "./dist/openapi/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "prepack": "node -e \"if(!(process.env.npm_config_user_agent||'').startsWith('pnpm/'))throw new Error('pack/publish with pnpm, not npm — workspace: protocol and publishConfig exports must be handled by pnpm')\" && npm run build",
+    "prepublishOnly": "node -e \"if(!(process.env.npm_config_user_agent||'').startsWith('pnpm/'))throw new Error('publish with pnpm, not npm — workspace: protocol must be rewritten')\""
+  },
+  "dependencies": {
+    "@standard-schema/spec": "^1.0.0",
+    "middy-problem-details": "workspace:^"
+  },
+  "peerDependencies": {
+    "@middy/core": ">=5.0.0 <8"
+  },
+  "peerDependenciesMeta": {
+    "@middy/core": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@middy/core": "^7.7.0",
+    "@types/node": "^24.13.3",
+    "joi": "^18.2.3",
+    "zod": "^4.4.3"
+  }
+}
