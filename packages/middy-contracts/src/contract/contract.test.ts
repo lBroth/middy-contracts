@@ -19,6 +19,19 @@ test("defineContract returns frozen inert data", () => {
   assert.ok(Object.isFrozen(contract.input));
 });
 
+test("invalid successStatus fails at definition time", () => {
+  for (const successStatus of [201.5, 42, Number.NaN]) {
+    assert.throws(
+      () =>
+        defineContract("bad.status", {
+          http: { method: "GET", path: "/x", successStatus },
+        }),
+      RangeError,
+      String(successStatus),
+    );
+  }
+});
+
 test("bare input schema normalizes to { body: schema }", () => {
   const schema = fakeSchema<{ email: string }>();
   const asShorthand = defineContract("users.create", {

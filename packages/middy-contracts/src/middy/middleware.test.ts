@@ -334,6 +334,24 @@ test("before: redactedParts: [] keeps validator messages", async () => {
   );
 });
 
+test("before: v2 rehydrated cookie survives strip-by-default header schemas", async () => {
+  const stripHeaders = defineContract("secure.op", {
+    input: { headers: z.object({ "x-api-key": z.string() }) },
+    http: { method: "GET", path: "/secure" },
+  });
+  const request: MiddyLikeRequest = {
+    event: {
+      headers: { "X-Api-Key": "k1" },
+      cookies: ["session=abc", "theme=dark"],
+    },
+  };
+  await contractValidator(stripHeaders).before(request);
+  assert.deepEqual(request.event.headers, {
+    "x-api-key": "k1",
+    cookie: "session=abc; theme=dark",
+  });
+});
+
 test("before: v2 cookies are rehydrated into the headers part", async () => {
   const withCookie = defineContract("session.read", {
     input: { headers: z.object({ cookie: z.string() }) },

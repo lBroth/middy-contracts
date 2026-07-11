@@ -64,10 +64,27 @@ export function problemDetailsHandler(options: ProblemDetailsHandlerOptions = {}
       request.response = {
         statusCode: body.status,
         headers: { "Content-Type": "application/problem+json" },
-        body: JSON.stringify(body),
+        body: safeStringify(body),
       };
     },
   };
+}
+
+/**
+ * Extension members are caller-controlled and may not be serializable
+ * (BigInt, circular refs, throwing toJSON). The error middleware must never
+ * throw on its own error path: fall back to the validated core members.
+ */
+function safeStringify(body: ProblemDetails): string {
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return JSON.stringify({
+      type: typeof body.type === "string" ? body.type : "about:blank",
+      title: String(body.title),
+      status: body.status,
+    });
+  }
 }
 
 const STATUS_TITLES: Readonly<Record<number, string>> = {

@@ -17,7 +17,7 @@ import { defineContract } from "middy-contracts";
 
 const CreateUser = defineContract("users.create", {
   input: z.object({ email: z.email(), age: z.number().min(18) }),
-  output: z.object({ id: z.string() }),
+  output: z.object({ id: z.string(), email: z.email() }),
   errors: [{ code: "USER_EXISTS", status: 409 }],
   http: { method: "POST", path: "/users", successStatus: 201 },
 });
@@ -28,10 +28,12 @@ One object drives the middleware, the error responses, and the spec. No adapter 
 ## Install
 
 ```sh
-pnpm add middy-contracts @middy/core
+pnpm add middy-contracts middy-problem-details @middy/core
 # plus your validator, e.g.
 pnpm add zod
 ```
+
+`middy-problem-details` must be a direct dependency when you import it yourself (as in the example below), even though `contractValidator` works without it.
 
 ## Usage
 
@@ -42,7 +44,7 @@ import middy from "@middy/core";
 import { contractValidator, validatedInput } from "middy-contracts/middy";
 import { problemDetailsHandler } from "middy-problem-details";
 
-export const handler = middy(async (event) => {
+export const handler = middy(async (event: { body: unknown }) => {
   // Fully typed, no casts: contractValidator validated and wrote the parsed
   // values back in `before`.
   const { body } = validatedInput(CreateUser, event);
@@ -112,7 +114,7 @@ No client package by design: generate one from the OpenAPI document (e.g. [orval
 - Base64-encoded bodies (`isBase64Encoded: true`) are decoded before JSON parsing.
 - Repeated query params surface as string arrays on REST v1 (via the multi-value map, single values unwrap); HTTP API v2 delivers them comma-joined by AWS.
 
-Consumers need TypeScript ≥ 5.7 (published declaration files use `.ts` specifiers rewritten at emit; older tsc versions cannot resolve them).
+Published declaration files reference sibling files with `.ts` specifiers; TypeScript resolves these to the emitted `.d.ts` files (verified down to TS 5.4).
 
 ## License
 

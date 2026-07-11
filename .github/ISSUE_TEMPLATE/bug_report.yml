@@ -1,0 +1,36 @@
+name: Bug report
+description: Something behaves incorrectly
+labels: [bug]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - middy-contracts
+        - middy-problem-details
+        - examples / docs
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: package version, @middy/core version, validator + version, Node.js version
+      placeholder: middy-contracts 0.1.0, @middy/core 7.7.0, zod 4.4.3, Node 22 (Lambda nodejs22.x)
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Contract definition + middleware setup + the event that triggers the bug
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual behavior
+    validations:
+      required: true

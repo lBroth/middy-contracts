@@ -86,6 +86,28 @@ test("generated documents never share the fallback problem schema object", () =>
   assert.notEqual(schemaOf(first), schemaOf(second));
 });
 
+test("duplicate contract names fail loud: operationId must be unique", () => {
+  const a = defineContract("same.name", { http: { method: "GET", path: "/a" } });
+  const b = defineContract("same.name", { http: { method: "GET", path: "/b" } });
+  assert.throws(() => toOpenAPI([a, b], info), /duplicate contract name "same\.name"/);
+});
+
+test("schemas converting to $ref/$defs fail loud instead of emitting broken refs", () => {
+  const refSchema = {
+    "~standard": {
+      version: 1 as const,
+      vendor: "test-ref",
+      validate: (value: unknown) => ({ value }),
+      jsonSchema: { input: () => ({ $ref: "#" }) },
+    },
+  };
+  const contract = defineContract("recursive.op", {
+    input: refSchema,
+    http: { method: "POST", path: "/recursive" },
+  });
+  assert.throws(() => toOpenAPI([contract], info), /\$ref\/\$defs.*cannot embed/);
+});
+
 test("paths differing only in parameter names fail loud", () => {
   const a = defineContract("a", { http: { method: "GET", path: "/users/:id" } });
   const b = defineContract("b", { http: { method: "POST", path: "/users/:userId" } });

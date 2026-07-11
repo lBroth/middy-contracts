@@ -23,8 +23,10 @@ export class OpenApiGenerationError extends Error {
   readonly code:
     | "unsupported-schema"
     | "duplicate-operation"
+    | "duplicate-operation-id"
     | "ambiguous-path"
-    | "non-object-parameters";
+    | "non-object-parameters"
+    | "unresolvable-ref";
   readonly contractName: string;
 
   constructor(code: OpenApiGenerationError["code"], contractName: string, message: string) {
@@ -56,10 +58,22 @@ export function toOpenAPI(
   const list = Array.isArray(contracts) ? contracts : Object.values(contracts);
   const paths: Record<string, Record<string, unknown>> = {};
   const byErasedPath = new Map<string, string>();
+  const seenNames = new Set<string>();
 
   for (const contract of list) {
     const path = toOpenApiPath(contract.http.path);
     const method = contract.http.method.toLowerCase();
+
+    // Contract names become operationIds, which OpenAPI requires to be
+    // unique across the whole document.
+    if (seenNames.has(contract.name)) {
+      throw new OpenApiGenerationError(
+        "duplicate-operation-id",
+        contract.name,
+        `middy-contracts/openapi: duplicate contract name "${contract.name}" — operationId must be unique across the document`,
+      );
+    }
+    seenNames.add(contract.name);
 
     // "/users/{id}" and "/users/{userId}" are the same route to a server but
     // two entries to OpenAPI tooling — reject the ambiguity.
@@ -244,5 +258,35 @@ function toJsonSchema(
     );
   }
   const { $schema: _dialect, ...converted } = convert({ target: "draft-2020-12" });
-  return converted;
+  return assertEmbeddable(converted, contract, where);
+}
+
+/**
+ * Converted schemas containing $ref/$defs cannot be embedded as-is: relative
+ * refs would resolve against the OpenAPI document root and silently break
+ * every consumer. Fail loud until ref hoisting into components.schemas is
+ * implemented.
+ */
+function assertEmbeddable(schema: JsonSchema, contract: Contract, where: string): JsonSchema {
+  const stack: unknown[] = [schema];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (Array.isArray(node)) {
+      stack.push(...node);
+      continue;
+    }
+    if (typeof node !== "object" || node === null) continue;
+    const record = node as Record<string, unknown>;
+    if ("$ref" in record || "$dynamicRef" in record || "$defs" in record) {
+      throw new OpenApiGenerationError(
+        "unresolvable-ref",
+        contract.name,
+        `middy-contracts/openapi: the ${where} schema of contract "${contract.name}" ` +
+          `converts to JSON Schema containing $ref/$defs (recursive or shared ` +
+          `definitions), which this generator cannot embed yet — flatten the schema`,
+      );
+    }
+    stack.push(...Object.values(record));
+  }
+  return schema;
 }

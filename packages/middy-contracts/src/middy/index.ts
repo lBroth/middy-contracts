@@ -162,6 +162,7 @@ export function contractValidator(
 
       const issues: ValidationIssue[] = [];
       const parsed = new Map<PartName, unknown>();
+      const extracted = new Map<PartName, unknown>();
 
       for (const part of REQUEST_PARTS) {
         const schema = input[part];
@@ -172,6 +173,7 @@ export function contractValidator(
           issues.push(extraction.issue);
           continue;
         }
+        extracted.set(part, extraction.value);
 
         const result = await runValidate(schema, extraction.value);
         if (result.issues) {
@@ -182,7 +184,9 @@ export function contractValidator(
       }
 
       if (issues.length > 0) throw new ContractValidationError(contract.name, issues);
-      for (const [part, value] of parsed) writeBack(request.event, part, value);
+      for (const [part, value] of parsed) {
+        writeBack(request.event, part, value, extracted.get(part));
+      }
     },
 
     async after(request) {
@@ -318,29 +322,33 @@ function lowercaseKeys(value: unknown): unknown {
 }
 
 /**
- * Body replaces the event value wholesale; the other parts merge over the
- * original map so undeclared query params/headers survive strip-by-default
- * validators. Headers merge over the lowercased originals to avoid duplicate
- * keys with mixed casing.
+ * Body and array-shaped results replace the event value wholesale —
+ * spreading an array into an object would mangle it. The other parts merge
+ * the parsed value over the SAME extracted view that was validated
+ * (lowercased headers with rehydrated cookie, multi-value query), so
+ * undeclared fields — including the v2 cookie — survive strip-by-default
+ * validators.
  */
-function writeBack(event: LambdaHttpEvent, part: PartName, value: unknown): void {
+function writeBack(
+  event: LambdaHttpEvent,
+  part: PartName,
+  value: unknown,
+  extractedBase: unknown,
+): void {
   const key = EVENT_KEYS[part];
-  // Body and array-shaped results replace wholesale — spreading an array into
-  // an object would mangle it.
   if (part === "body" || Array.isArray(value)) {
     event[key] = value;
     return;
   }
   // A schema resolving to undefined must not destroy the original map.
   if (value === undefined) return;
-  const original = part === "headers" ? lowercaseKeys(event[key]) : event[key];
   event[key] =
-    typeof original === "object" &&
-    original !== null &&
-    !Array.isArray(original) &&
+    typeof extractedBase === "object" &&
+    extractedBase !== null &&
+    !Array.isArray(extractedBase) &&
     typeof value === "object" &&
     value !== null
-      ? { ...original, ...value }
+      ? { ...extractedBase, ...value }
       : value;
 }
 
@@ -387,18 +395,17 @@ const ENVELOPE_KEYS = new Set([
  * Otherwise a raw payload whose schema legitimately declares a statusCode
  * field would be misclassified.
  */
-function asEnvelope(response: unknown): { statusCode: unknown; body: unknown } | undefined {
+function asEnvelope(response: unknown): { statusCode: number; body: unknown } | undefined {
   if (typeof response !== "object" || response === null || Array.isArray(response)) {
     return undefined;
   }
   const record = response as Record<string, unknown>;
   if (typeof record.statusCode !== "number") return undefined;
   if (!Object.keys(record).every((key) => ENVELOPE_KEYS.has(key))) return undefined;
-  return record as { statusCode: unknown; body: unknown };
+  return record as { statusCode: number; body: unknown };
 }
 
-function isSuccessStatus(statusCode: unknown, successStatus: number | undefined): boolean {
-  if (typeof statusCode !== "number") return true;
+function isSuccessStatus(statusCode: number, successStatus: number | undefined): boolean {
   if (successStatus !== undefined) return statusCode === successStatus;
   return statusCode >= 200 && statusCode < 300;
 }

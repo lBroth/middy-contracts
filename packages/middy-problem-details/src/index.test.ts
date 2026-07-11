@@ -119,6 +119,30 @@ test("a response already set by an earlier onError middleware is left untouched"
   assert.equal(request.response, sentinel);
 });
 
+test("non-serializable extension members never crash the error path", () => {
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+
+  const cases: Record<string, unknown>[] = [
+    { big: 10n },
+    { loop: circular },
+    { nested: { toJSON: () => { throw new Error("db://user:pass@host"); } } },
+  ];
+  for (const extensions of cases) {
+    const request: { response?: unknown; error?: unknown } = {
+      error: Object.assign(new Error("x"), {
+        problem: { title: "Validation failed", status: 422, ...extensions },
+      }),
+    };
+    problemDetailsHandler().onError(request);
+    const response = request.response as { statusCode: number; body: string };
+    assert.equal(response.statusCode, 422);
+    const body = JSON.parse(response.body) as ProblemDetails;
+    assert.equal(body.title, "Validation failed");
+    assert.ok(!response.body.includes("db://"), "serialization errors must not leak");
+  }
+});
+
 test("mapError overrides the default mapping", () => {
   const request: { response?: unknown; error?: unknown } = { error: new Error("x") };
   problemDetailsHandler({

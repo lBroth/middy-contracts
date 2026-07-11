@@ -132,6 +132,15 @@ export function defineContract<
   name: string,
   init: ContractInit<TInput, TOutput, TErrors>,
 ): Contract<NormalizedInput<TInput>, TOutput, TErrors> {
+  const { successStatus } = init.http;
+  if (
+    successStatus !== undefined &&
+    (!Number.isInteger(successStatus) || successStatus < 100 || successStatus > 599)
+  ) {
+    throw new RangeError(
+      `defineContract: successStatus must be an integer HTTP status code, got ${successStatus}`,
+    );
+  }
   const errors = (init.errors ?? []).map((e) => Object.freeze({ ...e }));
   return Object.freeze({
     name,
