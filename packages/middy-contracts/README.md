@@ -3,13 +3,13 @@
 [![CI](https://github.com/lBroth/middy-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/lBroth/middy-contracts/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-Contract-first toolkit for [Middy](https://middy.js.org). Define an operation once — with any [Standard Schema](https://standardschema.dev) validator (Zod, Valibot, ArkType, Joi 18+) — and get request/response validation, RFC 9457 errors, and OpenAPI 3.1 from the same artifact.
+Contract-first toolkit for [Middy](https://middy.js.org). Define an operation once with any [Standard Schema](https://standardschema.dev) validator (conformance-tested against Zod and Joi 18+) and get request/response validation, RFC 9457 errors, and OpenAPI 3.1 from the same artifact. OpenAPI generation additionally needs the validator's Standard JSON Schema support.
 
 > Status: early development, API unstable. Not published to npm yet.
 
 ## Why
 
-On a typical Lambda API these are three disconnected tools: `@middy/validator` wants hand-written JSON Schemas, error formats are ad-hoc per team, and the OpenAPI document is maintained by hand until it drifts from reality. Your schemas already know all of it. A contract makes them the single source of truth:
+On a typical Lambda API these are three disconnected tools: `@middy/validator` takes a precompiled ajv validator built from a JSON Schema that lives apart from your types, error formats are ad-hoc per team, and the OpenAPI document is maintained by hand until it drifts from reality. Your schemas already know all of it. A contract makes them the single source of truth:
 
 ```ts
 import { z } from "zod";
@@ -83,7 +83,7 @@ See [`examples/users-api`](https://github.com/lBroth/middy-contracts/tree/main/e
 
 | | [`@middy/validator`](https://middy.js.org/docs/middlewares/validator) | [`middy-standard-schema`](https://github.com/flubber2077/middy-standard-schema) | `middy-contracts` |
 |---|---|---|---|
-| Schemas | JSON Schema (ajv), hand-written | Standard Schema | Standard Schema |
+| Schemas | JSON Schema, precompiled ajv validator | Standard Schema | Standard Schema |
 | Request validation | event | event | per part: body / query / params / headers |
 | Response validation | ✅ | ✅ | ✅ with `off`/`warn`/`hard` modes, 2xx-gated |
 | Typed handler input | ❌ | event type merge | ✅ `validatedInput`, coercion-aware |
@@ -91,7 +91,7 @@ See [`examples/users-api`](https://github.com/lBroth/middy-contracts/tree/main/e
 | RFC 9457 errors | ❌ | ❌ | ✅ via `middy-problem-details` |
 | Reusable contract artifact | ❌ | ❌ | ✅ frozen data, drives everything above |
 
-Both alternatives are solid at what they scope to — use them if you only need event validation.
+Both alternatives are solid at what they scope to. Use them if you validate the event and response as a whole and don't need per-part validation, OpenAPI, or a shared contract artifact.
 
 ## Modules
 
@@ -107,14 +107,30 @@ No client package by design: generate one from the OpenAPI document (e.g. [orval
 
 ## Middleware options and caveats
 
-- **`responseValidation`** — `"off" | "warn" | "hard"`, default `"warn"`: violations are logged, never turned into failures. That also means **warn mode gives no output-filtering guarantee** — if the output schema is what strips sensitive fields, use `"hard"`.
+- **`responseValidation`** — `"off" | "warn" | "hard"`, default `"warn"`. In warn mode violations are logged and never become failures, and the response is left exactly as the handler returned it: warn never rewrites or strips a body, so it gives **no output-filtering guarantee**. If the output schema is what strips sensitive fields, use `"hard"`, which rewrites the response with the parsed value and fails closed with an opaque 500 on violation.
+- **Hard mode cannot check an already-serialized body.** If the response body reaches this middleware as a string, there is nothing to validate or strip, so it is passed through and hard mode logs that it skipped it. Mount `contractValidator` inner to any serializer (it runs on the raw handler output) whenever you rely on the output schema to strip fields.
 - **`redactedParts`** — parts whose validator issue messages are replaced with a generic one in the 400 response (some validators echo received values). Default `["headers"]`, so header values such as credentials never appear in error responses. Pass `[]` to disable.
 - **Headers schemas must use lowercase keys.** Header keys are lowercased before validation (and in the written-back map) so REST (v1) and HTTP API (v2) events behave identically. HTTP API v2 cookies are rehydrated as a `cookie` header.
 - **Mount after any body-parsing middleware** (e.g. `@middy/http-json-body-parser`): the parsed body object is written back onto the event.
 - Base64-encoded bodies (`isBase64Encoded: true`) are decoded before JSON parsing.
-- Repeated query params surface as string arrays on REST v1 (via the multi-value map, single values unwrap); HTTP API v2 delivers them comma-joined by AWS.
+- **Repeated query params.** REST v1 surfaces them as string arrays via the multi-value map, but a single occurrence unwraps to a scalar, so a plain `z.array(z.string())` rejects `?tag=a` while accepting `?tag=a&tag=b`. Declare array params so they accept both shapes:
+
+  ```ts
+  const tag = z
+    .union([z.string(), z.array(z.string())])
+    .transform((value) => (Array.isArray(value) ? value : [value]));
+
+  const ListItems = defineContract("items.list", {
+    input: { query: z.object({ tag }) },
+    http: { method: "GET", path: "/items" },
+  });
+  ```
+
+  HTTP API v2 has no multi-value map: AWS delivers repeated params comma-joined into a single string, so split them in the schema if you need a list.
 
 Published declaration files reference sibling files with `.ts` specifiers; TypeScript resolves these to the emitted `.d.ts` files (verified down to TS 5.4).
+
+The supported `@middy/core` range is verified end to end against 5.4.0, 6.4.0, 7.1.0 and 7.7.0. Middy 7.0.0 and 7.0.1 are excluded from the peer range: 7.0.1 imports an optional peer dependency unconditionally and fails to load at all, which Middy fixed in 7.1.0.
 
 ## License
 

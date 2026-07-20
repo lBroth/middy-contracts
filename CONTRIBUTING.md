@@ -33,6 +33,6 @@ Publish always goes through pnpm: pnpm rewrites `workspace:^` ranges and applies
 Publish-day sequence:
 
 1. Roll both `CHANGELOG.md` files: `[Unreleased]` → `[x.y.z] - YYYY-MM-DD`.
-2. Bump versions (`pnpm -r exec npm version x.y.z --no-git-tag-version`), update README status lines, commit.
+2. Bump versions (`pnpm --filter "./packages/*" exec npm version x.y.z --no-git-tag-version`), update README status lines, commit. The filter matters: a bare `pnpm -r exec` also bumps the private example.
 3. Tag `vx.y.z` and push — the `Release` workflow publishes both packages with npm provenance (requires the `NPM_TOKEN` secret; examples are `private` and skipped). Fallback: `pnpm run release` locally with npm 2FA.
 4. Create a GitHub Release pointing at the tag, body = the CHANGELOG entries.
