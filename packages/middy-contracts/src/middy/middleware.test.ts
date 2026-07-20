@@ -7,6 +7,7 @@ import {
   ContractValidationError,
   ContractResponseError,
   contractValidator,
+  validatedInput,
   type MiddyLikeRequest,
 } from "./index.ts";
 
@@ -157,6 +158,17 @@ test("after: output schema strips undeclared fields on valid responses", async (
   await contractValidator(orders, { responseValidation: "hard" }).after(request);
   assert.deepEqual(request.response, { statusCode: 200, body: { total: 3 } });
   assert.ok(!JSON.stringify(request.response).includes("s3cret"));
+});
+
+test("after: warn mode leaves a VALID response byte-for-byte intact (no stripping)", async () => {
+  const request: MiddyLikeRequest = {
+    event: {},
+    response: { statusCode: 200, body: { total: 3, extra: "kept" } },
+  };
+  // warn is observational: a valid body must NOT be rewritten/stripped, so an
+  // undeclared field survives (only hard mode strips).
+  await contractValidator(orders, { responseValidation: "warn" }).after(request);
+  assert.deepEqual(request.response, { statusCode: 200, body: { total: 3, extra: "kept" } });
 });
 
 test("after: already-serialized string bodies are skipped, byte-identical", async () => {
@@ -371,6 +383,92 @@ test("after: non-2xx envelopes are not validated against the success schema", as
   };
   await contractValidator(orders, { responseValidation: "hard" }).after(request);
   assert.deepEqual(request.response, { statusCode: 404, body: { message: "not found" } });
+});
+
+test("validatedInput returns exactly the declared parts, post-validation", async () => {
+  const request: MiddyLikeRequest = {
+    event: {
+      queryStringParameters: { limit: "5" },
+      pathParameters: { id: "42" },
+      // Undeclared by the contract: must not surface in the typed input.
+      body: JSON.stringify({ ignored: true }),
+    },
+  };
+  await contractValidator(orders).before(request);
+
+  const input = validatedInput(orders, request.event);
+  assert.deepEqual(Object.keys(input).sort(), ["params", "query"]);
+  assert.deepEqual(input, { query: { limit: 5 }, params: { id: 42 } });
+});
+
+test("validatedInput maps the bare-schema shorthand onto the body part", async () => {
+  const request: MiddyLikeRequest = {
+    event: { body: JSON.stringify({ email: "a@b.com", age: 30 }) },
+  };
+  await contractValidator(users).before(request);
+  assert.deepEqual(validatedInput(users, request.event), {
+    body: { email: "a@b.com", age: 30 },
+  });
+});
+
+test("validatedInput reads the headers part the middleware lowercased", async () => {
+  const secure = defineContract("secure.op", {
+    input: { headers: z.object({ "x-api-key": z.string() }) },
+    http: { method: "GET", path: "/secure" },
+  });
+  const request: MiddyLikeRequest = { event: { headers: { "X-Api-Key": "k1" } } };
+  await contractValidator(secure).before(request);
+  assert.deepEqual(validatedInput(secure, request.event), { headers: { "x-api-key": "k1" } });
+});
+
+test("validatedInput is undefined for a contract that declares no input", () => {
+  const ping = defineContract("ping", { http: { method: "GET", path: "/ping" } });
+  assert.equal(validatedInput(ping, {}), undefined);
+});
+
+test("before: a single repeated query param unwraps to a scalar", async () => {
+  // The multi-value map delivers ["a"] for one occurrence and ["a","b"] for
+  // two; single values unwrap to the scalar shape schemas usually expect, so a
+  // plain array schema fails on the one-value case. Documented in the README.
+  const strict = defineContract("items.strict", {
+    input: { query: z.object({ tag: z.array(z.string()) }) },
+    http: { method: "GET", path: "/items-strict" },
+  });
+  const single: MiddyLikeRequest = {
+    event: {
+      queryStringParameters: { tag: "a" },
+      multiValueQueryStringParameters: { tag: ["a"] },
+    },
+  };
+  await assert.rejects(() => contractValidator(strict).before(single), ContractValidationError);
+});
+
+test("before: an array query schema normalizing scalars handles 1 and N values", async () => {
+  const tag = z
+    .union([z.string(), z.array(z.string())])
+    .transform((value) => (Array.isArray(value) ? value : [value]));
+  const withTags = defineContract("items.list", {
+    input: { query: z.object({ tag }) },
+    http: { method: "GET", path: "/items" },
+  });
+
+  const single: MiddyLikeRequest = {
+    event: {
+      queryStringParameters: { tag: "a" },
+      multiValueQueryStringParameters: { tag: ["a"] },
+    },
+  };
+  await contractValidator(withTags).before(single);
+  assert.deepEqual(single.event.queryStringParameters, { tag: ["a"] });
+
+  const many: MiddyLikeRequest = {
+    event: {
+      queryStringParameters: { tag: "b" },
+      multiValueQueryStringParameters: { tag: ["a", "b"] },
+    },
+  };
+  await contractValidator(withTags).before(many);
+  assert.deepEqual(many.event.queryStringParameters, { tag: ["a", "b"] });
 });
 
 test("after: successStatus narrows which envelope gets validated", async () => {

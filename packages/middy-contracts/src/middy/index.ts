@@ -13,8 +13,9 @@ export interface ContractValidatorOptions {
    */
   readonly responseValidation?: ResponseValidationMode;
   /**
-   * Called for warn-mode response violations. Default logs to console.error
-   * with JSON-stringified issues.
+   * Called for warn-mode response violations, and in hard mode when a
+   * response cannot be checked at all because its body arrived already
+   * serialized. Default logs to console.error with JSON-stringified details.
    */
   readonly logger?: (message: string, details: unknown) => void;
   /**
@@ -141,7 +142,11 @@ const EVENT_KEYS: Readonly<Record<PartName, string>> = {
  *
  * `after` validates the handler's response against the output schema; when
  * the response is a { statusCode, body } envelope, only success responses
- * (2xx, or exactly http.successStatus when set) are validated.
+ * (2xx, or exactly http.successStatus when set) are validated. Only hard mode
+ * rewrites the response with the parsed value, so only hard mode strips
+ * undeclared fields: warn is observational and leaves a valid body untouched.
+ * An already-serialized string body cannot be validated or stripped; hard mode
+ * logs that it skipped such a response instead of failing silently.
  *
  * Mount AFTER any body-parsing middleware (e.g. @middy/http-json-body-parser):
  * this middleware writes the parsed body object back onto the event, which a
@@ -197,9 +202,21 @@ export function contractValidator(
         return;
       }
       const payload = envelope ? envelope.body : request.response;
-      // An already-serialized body cannot be validated meaningfully here;
-      // mount this middleware so it runs on the raw handler output instead.
-      if (typeof payload === "string") return;
+      // An already-serialized body cannot be validated or stripped here. This
+      // is a silent hole in hard mode's guarantee, so surface it: mount this
+      // middleware inner to any response serializer so it runs on the raw
+      // handler output instead.
+      if (typeof payload === "string") {
+        if (mode === "hard") {
+          logger(
+            `middy-contracts: response for contract "${contract.name}" is an already-serialized ` +
+              `string; hard-mode validation and field-stripping were SKIPPED. Mount ` +
+              `contractValidator inner to any serializer to enforce the output contract.`,
+            { contract: contract.name, reason: "pre-serialized-string-body" },
+          );
+        }
+        return;
+      }
 
       const result = await runValidate(contract.output, payload);
       if (result.issues) {
@@ -209,8 +226,14 @@ export function contractValidator(
         return;
       }
 
-      if (envelope) envelope.body = result.value;
-      else request.response = result.value;
+      // Only hard mode rewrites the response with the parsed (stripped) value.
+      // warn mode is observational: a valid body is left byte-for-byte intact,
+      // so a strip-by-default validator never silently drops undeclared fields
+      // on the happy path unless the caller opted into hard.
+      if (mode === "hard") {
+        if (envelope) envelope.body = result.value;
+        else request.response = result.value;
+      }
     },
   };
 }
