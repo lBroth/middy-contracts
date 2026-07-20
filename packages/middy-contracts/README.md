@@ -37,7 +37,7 @@ pnpm add zod
 
 ## Usage
 
-Validate requests and responses in a Middy chain:
+### Validate a request
 
 ```ts
 import middy from "@middy/core";
@@ -69,15 +69,114 @@ An invalid request never reaches the handler — it becomes one `application/pro
 }
 ```
 
-Generate OpenAPI 3.1 from the same contracts (build-time, e.g. in CI):
+### Validate each part separately
+
+A bare schema is shorthand for `{ body: schema }`. Declare parts explicitly to validate the rest of the request, each against the event field it comes from:
+
+| Part | Event field | Notes |
+|---|---|---|
+| `body` | `event.body` | JSON-parsed, base64-decoded first when flagged |
+| `query` | `event.queryStringParameters` | multi-value map preferred on REST v1 |
+| `params` | `event.pathParameters` | must match the `{var}`s in `http.path` |
+| `headers` | `event.headers` | keys lowercased, so schema keys must be lowercase too |
 
 ```ts
+export const GetUser = defineContract("users.get", {
+  input: {
+    params: z.object({ id: z.coerce.number().int() }),
+    query: z.object({ expand: z.coerce.boolean().default(false) }),
+    headers: z.object({ "x-api-key": z.string() }),
+  },
+  output: z.object({ id: z.number(), email: z.email() }),
+  errors: [{ code: "USER_NOT_FOUND", status: 404 }],
+  http: { method: "GET", path: "/users/:id" },
+});
+```
+
+Everything AWS delivers as a string arrives at your handler already coerced, defaults applied, and typed as such:
+
+```ts
+import type { InferOutput } from "middy-contracts";
+
+export const getUser = middy(async (event: { pathParameters: unknown }) => {
+  const { params, query } = validatedInput(GetUser, event);
+  const id: number = params.id;        // coerced from the string AWS delivers
+  const expand: boolean = query.expand; // default applied
+
+  const body: InferOutput<typeof GetUser> = { id, email: "ada@example.com" };
+  return { statusCode: 200, body };
+})
+  .use(contractValidator(GetUser, { responseValidation: "hard" }))
+  .use(problemDetailsHandler());
+```
+
+`validatedInput` returns only the parts the contract declares, so reading `body` off a contract that declares none is a compile error rather than a runtime `undefined`.
+
+### Fail with a declared error
+
+`errors` is **documentation**: it shapes the OpenAPI responses and gives you `InferErrorCodes`, but nothing emits those codes for you. Any error following the http-errors convention (`statusCode`, `expose`) already becomes a Problem Details response:
+
+```ts
+throw Object.assign(new Error(`No user with id ${params.id}`), {
+  statusCode: 404,
+  expose: true,
+});
+```
+
+To put the machine-readable code on the wire, attach a `problem` and let the declared codes type-check it:
+
+```ts
+import { problem } from "middy-problem-details";
+import type { InferErrorCodes } from "middy-contracts";
+
+function fail(code: InferErrorCodes<typeof GetUser>, status: number, detail: string) {
+  return Object.assign(new Error(detail), {
+    statusCode: status,
+    expose: true,
+    problem: problem({ status, title: "Not Found", detail, code }),
+  });
+}
+
+throw fail("USER_NOT_FOUND", 404, `No user with id ${params.id}`);
+```
+
+```json
+{
+  "type": "about:blank",
+  "status": 404,
+  "title": "Not Found",
+  "detail": "No user with id 42",
+  "code": "USER_NOT_FOUND"
+}
+```
+
+A typo in the code is now a compile error, and the same string appears in the generated spec.
+
+### Choose a response validation mode
+
+| Mode | On violation | On a valid response |
+|---|---|---|
+| `"off"` | nothing | untouched |
+| `"warn"` (default) | logged | untouched, **never stripped** |
+| `"hard"` | opaque `500` | rewritten with the parsed value, so undeclared fields are stripped |
+
+Only success responses are checked: any 2xx, or exactly `http.successStatus` when you set one. Reach for `"hard"` when the output schema is what keeps internal fields out of responses, and read the caveat about already-serialized bodies below.
+
+### Generate OpenAPI 3.1
+
+Build-time only, from the same contracts. Never import this from a handler:
+
+```ts
+import { writeFileSync } from "node:fs";
 import { toOpenAPI } from "middy-contracts/openapi";
 
 const document = toOpenAPI([CreateUser, GetUser], { title: "Users API", version: "1.0.0" });
+writeFileSync("openapi.json", JSON.stringify(document, null, 2));
 ```
 
-See [`examples/users-api`](https://github.com/lBroth/middy-contracts/tree/main/examples/users-api) for a runnable end-to-end demo (`pnpm demo`).
+The generator fails loudly rather than emitting a document that lies: unknown validators, duplicate operation ids, ambiguous paths, and path templates that disagree with the declared `params` all throw `OpenApiGenerationError` with a `code` you can switch on.
+
+See [`examples/users-api`](https://github.com/lBroth/middy-contracts/tree/main/examples/users-api) for a runnable end-to-end demo (`pnpm demo`, `pnpm openapi`).
 
 ## Compared to
 
