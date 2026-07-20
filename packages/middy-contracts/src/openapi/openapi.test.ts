@@ -109,9 +109,33 @@ test("schemas converting to $ref/$defs fail loud instead of emitting broken refs
 });
 
 test("paths differing only in parameter names fail loud", () => {
-  const a = defineContract("a", { http: { method: "GET", path: "/users/:id" } });
-  const b = defineContract("b", { http: { method: "POST", path: "/users/:userId" } });
+  const a = defineContract("a", {
+    input: { params: z.object({ id: z.string() }) },
+    http: { method: "GET", path: "/users/:id" },
+  });
+  const b = defineContract("b", {
+    input: { params: z.object({ userId: z.string() }) },
+    http: { method: "POST", path: "/users/:userId" },
+  });
   assert.throws(() => toOpenAPI([a, b], info), /differ only in parameter names/);
+});
+
+test("path template variable without a matching params field fails loud", () => {
+  const noParams = defineContract("noParams", {
+    http: { method: "GET", path: "/users/:id" },
+  });
+  assert.throws(
+    () => toOpenAPI([noParams], info),
+    /path-parameter-mismatch|no matching field in the "params" schema/,
+  );
+});
+
+test("params field that is not in the path template fails loud", () => {
+  const extra = defineContract("extra", {
+    input: { params: z.object({ id: z.string(), stray: z.string() }) },
+    http: { method: "GET", path: "/users/:id" },
+  });
+  assert.throws(() => toOpenAPI([extra], info), /do not appear in the path template/);
 });
 
 test("path template converts and parts explode into located parameters", () => {
@@ -167,3 +191,129 @@ test("duplicate method+path across contracts fails loud", () => {
   const b = defineContract("b", { http: { method: "GET", path: "/same" } });
   assert.throws(() => toOpenAPI([a, b], info), /duplicate operation GET \/same/);
 });
+
+test("nested objects and arrays survive conversion in body and response", () => {
+  const nested = defineContract("nested.op", {
+    input: z.object({
+      user: z.object({ name: z.string(), tags: z.array(z.string()) }),
+      items: z.array(z.object({ sku: z.string(), qty: z.number().int() })),
+    }),
+    output: z.object({ ids: z.array(z.string()) }),
+    http: { method: "POST", path: "/nested" },
+  });
+  const document = toOpenAPI([nested], info);
+
+  const operation = document.paths["/nested"]?.post as {
+    requestBody: { content: Record<string, { schema: JsonLike }> };
+    responses: Record<string, { content: Record<string, { schema: JsonLike }> }>;
+  };
+
+  const body = operation.requestBody.content["application/json"]!.schema;
+  const user = properties(body).user as JsonLike;
+  assert.equal((properties(user).tags as JsonLike).type, "array");
+  assert.equal((properties(user).name as JsonLike).type, "string");
+
+  const items = properties(body).items as JsonLike;
+  assert.equal(items.type, "array");
+  assert.equal((properties(items.items as JsonLike).sku as JsonLike).type, "string");
+
+  const output = operation.responses["200"]!.content["application/json"]!.schema;
+  assert.equal((properties(output).ids as JsonLike).type, "array");
+});
+
+/**
+ * Request schemas must convert through `.input()` (wire types, pre-coercion)
+ * and the output schema through `.output()` (parsed types). Swapping the two
+ * would still emit a structurally valid document, so assert the direction
+ * itself with a schema whose two conversions are distinguishable.
+ */
+const directionSchema = {
+  "~standard": {
+    version: 1 as const,
+    vendor: "test-direction",
+    validate: (value: unknown) => ({ value }),
+    jsonSchema: {
+      input: () => ({ type: "object", properties: { wire: { type: "string" } } }),
+      output: () => ({ type: "object", properties: { parsed: { type: "number" } } }),
+    },
+  },
+};
+
+test("body converts with .input() and the response with .output()", () => {
+  const contract = defineContract("direction.op", {
+    input: directionSchema,
+    output: directionSchema,
+    http: { method: "POST", path: "/direction" },
+  });
+  const document = toOpenAPI([contract], info);
+
+  const operation = document.paths["/direction"]?.post as {
+    requestBody: { content: Record<string, { schema: JsonLike }> };
+    responses: Record<string, { content: Record<string, { schema: JsonLike }> }>;
+  };
+
+  assert.deepEqual(
+    Object.keys(properties(operation.requestBody.content["application/json"]!.schema)),
+    ["wire"],
+    "request body must use the .input() (wire) conversion",
+  );
+  assert.deepEqual(
+    Object.keys(properties(operation.responses["200"]!.content["application/json"]!.schema)),
+    ["parsed"],
+    "response must use the .output() (parsed) conversion",
+  );
+});
+
+test("query parameters also convert with .input()", () => {
+  const contract = defineContract("direction.query", {
+    input: { query: directionSchema },
+    output: directionSchema,
+    http: { method: "GET", path: "/direction-query" },
+  });
+  const document = toOpenAPI([contract], info);
+
+  const operation = document.paths["/direction-query"]?.get as {
+    parameters: Array<{ name: string; in: string }>;
+  };
+  assert.deepEqual(
+    operation.parameters.map((parameter) => parameter.name),
+    ["wire"],
+  );
+});
+
+test("a contract without successStatus documents its response under 200", () => {
+  const document = toOpenAPI([getOrder], info);
+  const operation = document.paths["/orders/{id}"]?.get as {
+    responses: Record<string, { description: string; content?: unknown }>;
+  };
+
+  assert.ok(operation.responses["200"]?.content, "default success status must be 200");
+  assert.equal(operation.responses["200"]?.description, "Success");
+});
+
+test("a parameters part that converts to a non-object schema fails loud", () => {
+  const scalarSchema = {
+    "~standard": {
+      version: 1 as const,
+      vendor: "test-scalar",
+      validate: (value: unknown) => ({ value }),
+      jsonSchema: { input: () => ({ type: "string" }) },
+    },
+  };
+  const contract = defineContract("scalar.query", {
+    input: { query: scalarSchema },
+    http: { method: "GET", path: "/scalar" },
+  });
+  assert.throws(
+    () => toOpenAPI([contract], info),
+    /the query schema of contract "scalar\.query" must convert to an object JSON Schema with properties/,
+  );
+});
+
+type JsonLike = Record<string, unknown>;
+
+function properties(schema: JsonLike): Record<string, unknown> {
+  const value = schema.properties;
+  assert.ok(typeof value === "object" && value !== null, "schema must carry properties");
+  return value as Record<string, unknown>;
+}

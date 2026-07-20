@@ -26,6 +26,7 @@ export class OpenApiGenerationError extends Error {
     | "duplicate-operation-id"
     | "ambiguous-path"
     | "non-object-parameters"
+    | "path-parameter-mismatch"
     | "unresolvable-ref";
   readonly contractName: string;
 
@@ -46,10 +47,12 @@ export class OpenApiGenerationError extends Error {
  *
  * Throws when a schema's validator does not implement Standard JSON Schema
  * (request schemas convert with `.input()` — wire types — and the output
- * schema with `.output()` — parsed types), on duplicate method+path across
- * contracts, on two paths differing only in parameter names, and when a
- * params/query/headers schema does not convert to an object JSON Schema
- * with properties.
+ * schema with `.output()` — parsed types), on duplicate contract names
+ * (operationIds must be unique), on duplicate method+path across contracts,
+ * on two paths differing only in parameter names, when the `{var}`s in a path
+ * template do not match the fields declared in that contract's `params`
+ * schema, and when a params/query/headers schema does not convert to an
+ * object JSON Schema with properties.
  */
 export function toOpenAPI(
   contracts: readonly Contract[] | Readonly<Record<string, Contract>>,
@@ -107,14 +110,42 @@ function toOpenApiPath(path: string): string {
   return path.replace(/:([^/]+)/g, "{$1}");
 }
 
+/** Extract `{var}` names from an OpenAPI path template, e.g. "/users/{id}" → ["id"]. */
+function pathTemplateVars(openApiPath: string): string[] {
+  return [...openApiPath.matchAll(/\{([^/}]+)\}/g)].map((m) => m[1] as string);
+}
+
 function toOperation(contract: Contract): Record<string, unknown> {
   const operation: Record<string, unknown> = { operationId: contract.name };
 
+  const pathParams = toParameters(contract, "params");
   const parameters = [
-    ...toParameters(contract, "params"),
+    ...pathParams,
     ...toParameters(contract, "query"),
     ...toParameters(contract, "headers"),
   ];
+
+  // OpenAPI 3.1 Path Templating: every `{var}` in the path must have a matching
+  // path parameter, and every path parameter must appear in the path. A contract
+  // that declares `path: "/users/:id"` with no (or a mismatched) `params` schema
+  // would otherwise emit a document rejected by any OpenAPI validator.
+  const templateVars = new Set(pathTemplateVars(toOpenApiPath(contract.http.path)));
+  const declared = new Set(pathParams.map((p) => p.name as string));
+  const missingSchema = [...templateVars].filter((v) => !declared.has(v));
+  const notInPath = [...declared].filter((v) => !templateVars.has(v));
+  if (missingSchema.length > 0 || notInPath.length > 0) {
+    const parts: string[] = [];
+    if (missingSchema.length > 0)
+      parts.push(`path template variable(s) [${missingSchema.join(", ")}] have no matching field in the "params" schema`);
+    if (notInPath.length > 0)
+      parts.push(`"params" field(s) [${notInPath.join(", ")}] do not appear in the path template`);
+    throw new OpenApiGenerationError(
+      "path-parameter-mismatch",
+      contract.name,
+      `middy-contracts/openapi: contract "${contract.name}" (path "${contract.http.path}"): ${parts.join("; ")}`,
+    );
+  }
+
   if (parameters.length > 0) operation.parameters = parameters;
 
   const bodySchema = contract.input?.body;
