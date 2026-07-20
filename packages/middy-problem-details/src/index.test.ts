@@ -152,3 +152,41 @@ test("mapError overrides the default mapping", () => {
   const response = request.response as { statusCode: number };
   assert.equal(response.statusCode, 418);
 });
+
+test("about:blank problems title every registered error status with its status phrase", () => {
+  // RFC 9457 §4.2.1: with type "about:blank" the title SHOULD be the HTTP
+  // status phrase. A partial table silently degraded whole ranges to "Error".
+  const expected: Record<number, string> = {
+    402: "Payment Required",
+    408: "Request Timeout",
+    410: "Gone",
+    413: "Content Too Large",
+    418: "I'm a Teapot",
+    422: "Unprocessable Content",
+    426: "Upgrade Required",
+    451: "Unavailable For Legal Reasons",
+    501: "Not Implemented",
+    507: "Insufficient Storage",
+    511: "Network Authentication Required",
+  };
+
+  for (const [status, title] of Object.entries(expected)) {
+    const request: { response?: unknown; error?: unknown } = {
+      error: Object.assign(new Error("boom"), { statusCode: Number(status), expose: true }),
+    };
+    problemDetailsHandler().onError(request);
+    const body = JSON.parse((request.response as { body: string }).body) as ProblemDetails;
+    assert.equal(body.type, "about:blank");
+    assert.equal(body.title, title, `status ${status} must use its HTTP status phrase`);
+  }
+});
+
+test("unregistered error statuses fall back to a generic title", () => {
+  const request: { response?: unknown; error?: unknown } = {
+    error: Object.assign(new Error("boom"), { statusCode: 499, expose: true }),
+  };
+  problemDetailsHandler().onError(request);
+  const body = JSON.parse((request.response as { body: string }).body) as ProblemDetails;
+  assert.equal(body.title, "Error");
+  assert.equal(body.status, 499);
+});

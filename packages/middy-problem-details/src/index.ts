@@ -17,7 +17,7 @@ export interface ProblemInit extends Record<string, unknown> {
   readonly instance?: string;
 }
 
-/** Build a Problem Details object. `type` defaults to "about:blank" per RFC 9457 §4.2.1. */
+/** Build a Problem Details object. `type` defaults to "about:blank" per RFC 9457 §3.1.1. */
 export function problem(init: ProblemInit): ProblemDetails {
   const { type = "about:blank", ...rest } = init;
   return { type, ...rest };
@@ -87,20 +87,53 @@ function safeStringify(body: ProblemDetails): string {
   }
 }
 
+/**
+ * HTTP status phrases for every error code in the IANA registry. RFC 9457
+ * §4.2.1: when `type` is "about:blank", the title SHOULD be the status phrase,
+ * so this table must stay exhaustive over 400-599 rather than covering only
+ * the common codes. Unregistered codes (499, vendor 5xx) fall back to "Error".
+ */
 const STATUS_TITLES: Readonly<Record<number, string>> = {
   400: "Bad Request",
   401: "Unauthorized",
+  402: "Payment Required",
   403: "Forbidden",
   404: "Not Found",
   405: "Method Not Allowed",
+  406: "Not Acceptable",
+  407: "Proxy Authentication Required",
+  408: "Request Timeout",
   409: "Conflict",
+  410: "Gone",
+  411: "Length Required",
+  412: "Precondition Failed",
+  413: "Content Too Large",
+  414: "URI Too Long",
   415: "Unsupported Media Type",
+  416: "Range Not Satisfiable",
+  417: "Expectation Failed",
+  418: "I'm a Teapot",
+  421: "Misdirected Request",
   422: "Unprocessable Content",
+  423: "Locked",
+  424: "Failed Dependency",
+  425: "Too Early",
+  426: "Upgrade Required",
+  428: "Precondition Required",
   429: "Too Many Requests",
+  431: "Request Header Fields Too Large",
+  451: "Unavailable For Legal Reasons",
   500: "Internal Server Error",
+  501: "Not Implemented",
   502: "Bad Gateway",
   503: "Service Unavailable",
   504: "Gateway Timeout",
+  505: "HTTP Version Not Supported",
+  506: "Variant Also Negotiates",
+  507: "Insufficient Storage",
+  508: "Loop Detected",
+  510: "Not Extended",
+  511: "Network Authentication Required",
 };
 
 function defaultProblem(error: unknown, exposeInternalErrors: boolean): ProblemDetails {
