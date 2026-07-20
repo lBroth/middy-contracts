@@ -10,6 +10,8 @@
     "check": "pnpm -r run check",
     "test": "pnpm -r run test",
     "build": "pnpm -r run build",
+    "demo": "pnpm --filter example-users-api run demo",
+    "openapi": "pnpm --filter example-users-api run openapi",
     "release": "pnpm -r publish --access public"
   },
   "devDependencies": {

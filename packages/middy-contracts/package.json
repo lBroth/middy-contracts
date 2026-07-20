@@ -4,6 +4,7 @@
   "description": "Contract-first toolkit for Middy: Standard Schema request/response validation, OpenAPI 3.1 generation, RFC 9457 errors.",
   "type": "module",
   "license": "MIT",
+  "author": "lBroth (https://github.com/lBroth)",
   "sideEffects": false,
   "repository": {
     "type": "git",
@@ -28,8 +29,6 @@
     "rest",
     "api",
     "zod",
-    "valibot",
-    "arktype",
     "joi"
   ],
   "files": [
@@ -84,7 +83,7 @@
     "middy-problem-details": "workspace:^"
   },
   "peerDependencies": {
-    "@middy/core": ">=5.4.0 <7.0.0 || >=7.0.1 <8"
+    "@middy/core": ">=5.4.0 <7.0.0 || >=7.1.0 <8"
   },
   "peerDependenciesMeta": {
     "@middy/core": {

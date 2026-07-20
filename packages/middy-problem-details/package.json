@@ -4,6 +4,7 @@
   "description": "RFC 9457 Problem Details error responses for Middy (application/problem+json).",
   "type": "module",
   "license": "MIT",
+  "author": "lBroth (https://github.com/lBroth)",
   "sideEffects": false,
   "repository": {
     "type": "git",
