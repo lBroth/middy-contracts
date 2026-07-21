@@ -7,14 +7,6 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
-    ignore:
-      # TypeScript 7 is the native port and breaks the build today: @types/node
-      # stops resolving, so Buffer, console, structuredClone and
-      # Error.captureStackTrace all come back unresolved. Worth doing as its own
-      # piece of work rather than as a weekly dependency bump. Drop this ignore
-      # when that work happens.
-      - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

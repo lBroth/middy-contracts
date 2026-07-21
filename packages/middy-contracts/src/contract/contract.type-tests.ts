@@ -65,10 +65,13 @@ export type Cases = [
   Expect<Equal<InferOutput<typeof shorthand>, { id: string }>>,
   Expect<Equal<InferInput<typeof bare>, undefined>>,
   Expect<Equal<InferOutput<typeof bare>, undefined>>,
+  // An optional coerced field keeps the `| undefined` on the handler-side type:
+  // z `.optional()` is `T | undefined`, which TS 7 preserves under
+  // exactOptionalPropertyTypes (TS 5.x used to strip it on the mapped property).
   Expect<
     Equal<
       InferInput<typeof withParts>,
-      { readonly query: { limit?: number }; readonly params: { id: number } }
+      { readonly query: { limit?: number | undefined }; readonly params: { id: number } }
     >
   >,
   Expect<
