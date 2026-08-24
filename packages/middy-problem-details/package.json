@@ -59,6 +59,6 @@
     "prepublishOnly": "node -e \"if(!(process.env.npm_config_user_agent||'').startsWith('pnpm/'))throw new Error('publish with pnpm, not npm')\""
   },
   "devDependencies": {
-    "@types/node": "^24.13.3"
+    "@types/node": "^26.2.0"
   }
 }
