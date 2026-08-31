@@ -10,7 +10,7 @@
     "openapi": "node src/openapi.ts"
   },
   "dependencies": {
-    "@middy/core": "^7.7.0",
+    "@middy/core": "^7.9.2",
     "middy-contracts": "workspace:*",
     "middy-problem-details": "workspace:*",
     "zod": "^4.4.3"
