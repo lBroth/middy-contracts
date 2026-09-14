@@ -27,8 +27,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/middy-problem-details
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.6.2
+        version: 4.6.2
 
   packages/middy-contracts:
     dependencies:
@@ -49,8 +49,8 @@ importers:
         specifier: ^18.2.3
         version: 18.2.3
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.6.2
+        version: 4.6.2
 
   packages/middy-problem-details:
     devDependencies:
@@ -231,8 +231,8 @@ packages:
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.6.2:
+    resolution: {integrity: sha512-lh5RCAGFa1Cm2hjtNwLQhSs/AsqdWnTQaBER9fEwN/88pSh7KOtJavtBx/0VlkN/uFd61SwYmljLMDAsHlvzBQ==}
 
 snapshots:
 
@@ -359,4 +359,4 @@ snapshots:
 
   undici-types@7.18.2: {}
 
-  zod@4.4.3: {}
+  zod@4.6.2: {}
