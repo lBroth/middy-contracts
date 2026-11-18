@@ -5,7 +5,7 @@
 
 Contract-first toolkit for [Middy](https://middy.js.org). Define an operation once with any [Standard Schema](https://standardschema.dev) validator (conformance-tested against Zod and Joi 18+) and get request/response validation, RFC 9457 errors, and OpenAPI 3.1 from the same artifact. OpenAPI generation additionally needs the validator's Standard JSON Schema support.
 
-> Status: early development, API unstable. Not published to npm yet.
+> Status: pre-1.0. The API may change between minor versions until 1.0.0.
 
 ## Why
 
@@ -229,7 +229,7 @@ No client package by design: generate one from the OpenAPI document (e.g. [orval
 
 Published declaration files reference sibling files with `.ts` specifiers; TypeScript resolves these to the emitted `.d.ts` files (verified down to TS 5.4).
 
-The supported `@middy/core` range is verified end to end against 5.4.0, 6.4.0, 7.1.0 and 7.7.0. Middy 7.0.0 and 7.0.1 are excluded from the peer range: 7.0.1 imports an optional peer dependency unconditionally and fails to load at all, which Middy fixed in 7.1.0.
+The supported `@middy/core` range is verified end to end against 5.4.0, 6.4.0, 7.1.0, 7.7.0 and 7.9.2. Middy 7.0.0 and 7.0.1 are excluded from the peer range: 7.0.1 imports an optional peer dependency unconditionally and fails to load at all, which Middy fixed in 7.1.0.
 
 ## License
 

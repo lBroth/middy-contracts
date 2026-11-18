@@ -7,7 +7,7 @@
 
 Standalone — works with any Middy stack, no other dependency.
 
-> Status: early development. Not published to npm yet.
+> Status: pre-1.0. The API may change between minor versions until 1.0.0.
 
 ## Install
 

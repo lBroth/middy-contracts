@@ -2,9 +2,9 @@
 
 All notable changes to `middy-problem-details` are documented here. Format: [Keep a Changelog](https://keepachangelog.com), versioning: [SemVer](https://semver.org).
 
-## [0.1.0] - 2026-07-20
+## [0.1.0] - 2026-11-18
 
-First release. Nothing is published yet, so this documents the initial surface rather than a delta.
+First release. This documents the initial surface rather than a delta.
 
 ### Added
 

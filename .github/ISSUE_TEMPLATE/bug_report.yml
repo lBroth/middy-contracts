@@ -17,7 +17,7 @@ body:
     attributes:
       label: Versions
       description: package version, @middy/core version, validator + version, Node.js version
-      placeholder: middy-contracts 0.1.0, @middy/core 7.7.0, zod 4.4.3, Node 22 (Lambda nodejs22.x)
+      placeholder: middy-contracts 0.1.0, @middy/core 7.9.2, zod 4.6.7, Node 22 (Lambda nodejs22.x)
     validations:
       required: true
   - type: textarea

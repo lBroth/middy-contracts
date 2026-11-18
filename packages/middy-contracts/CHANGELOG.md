@@ -2,9 +2,9 @@
 
 All notable changes to `middy-contracts` are documented here. Format: [Keep a Changelog](https://keepachangelog.com), versioning: [SemVer](https://semver.org).
 
-## [0.1.0] - 2026-07-20
+## [0.1.0] - 2026-11-18
 
-First release. Nothing is published yet, so this documents the initial surface rather than a delta.
+First release. This documents the initial surface rather than a delta.
 
 ### Added
 
@@ -20,4 +20,4 @@ First release. Nothing is published yet, so this documents the initial surface r
 - `hard` cannot inspect a body that arrives already serialized as a string; it logs that it skipped the check. Mount `contractValidator` inner to any serializer when you rely on stripping.
 - Declared `errors` drive the OpenAPI responses and `InferErrorCodes`; nothing emits those codes at runtime unless you attach a `problem` carrying one.
 - `toOpenAPI` refuses to emit an invalid document: unknown validators, `$ref`/`$defs`, duplicate operation ids, duplicate or ambiguous paths, and path templates that disagree with the declared `params` all throw.
-- Verified against `@middy/core` 5.4.0, 6.4.0, 7.1.0 and 7.7.0, and against TypeScript down to 5.4. Middy 7.0.0 and 7.0.1 are excluded from the peer range.
+- Verified against `@middy/core` 5.4.0, 6.4.0, 7.1.0, 7.7.0 and 7.9.2, and against TypeScript down to 5.4. Middy 7.0.0 and 7.0.1 are excluded from the peer range.

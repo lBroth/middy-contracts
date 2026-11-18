@@ -5,7 +5,7 @@
 
 Contract-first toolkit for [Middy](https://middy.js.org): define an operation once, get request/response validation, RFC 9457 errors, and OpenAPI 3.1 from the same artifact.
 
-> Status: early development. Nothing published yet.
+> Status: pre-1.0. The API may change between minor versions until 1.0.0.
 
 ## Packages
 
